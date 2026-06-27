@@ -25,6 +25,7 @@ export function CompanyList() {
       let query = supabase
         .from('companies')
         .select('id, name, ticker, sector, archetype, current_price, last_return')
+        .eq('is_listed', true)
         .order('ticker', { ascending: true });
 
       if (sectorFilter !== 'all') {

@@ -21,7 +21,18 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // Bounds how much work a single invocation does. If the user fast-forwards to a
 // huge multiplier, we process this many simulated minutes now and pick up the
 // remainder on the next cron firing rather than blocking on one giant batch.
-const MAX_TICKS_PER_RUN = 100;
+// Batching the per-company writes into bulk_update_companies (below) fixed
+// the crash that happened at the old cap of 100, but empirically this Edge
+// Function's resource limit is tighter than expected -- 60 and even 150
+// ticks-per-run (60-150 x 500+ companies of price_history rows in one insert)
+// still tripped WORKER_RESOURCE_LIMIT under testing, while 30 reliably
+// succeeded. Known limitation: at the fastest supported multiplier (1000x),
+// sustained throughput needs ~500 ticks per 30s cron firing to keep the
+// simulated clock from lagging real-time, and 30 cannot sustain that -- the
+// clock will catch up correctly but more slowly than 1000x implies during
+// sustained high-multiplier use. Revisit by chunking the price_history
+// insert into smaller batches per call rather than raising this further.
+const MAX_TICKS_PER_RUN = 30;
 
 const SECTORS = [
   'technology', 'healthcare', 'energy', 'financials',
@@ -116,7 +127,8 @@ Deno.serve(async () => {
 
   const { data: companies, error: companiesError } = await supabase
     .from('companies')
-    .select('id, sector, archetype, current_price, drift, volatility, event_probability, mean_reversion_strength, momentum_strength, beta, anchor_price, last_return');
+    .select('id, sector, archetype, current_price, drift, volatility, event_probability, mean_reversion_strength, momentum_strength, beta, anchor_price, last_return')
+    .eq('is_listed', true);
 
   if (companiesError || !companies) {
     return new Response(JSON.stringify({ error: companiesError?.message ?? 'failed to load companies' }), { status: 500 });
@@ -213,13 +225,18 @@ Deno.serve(async () => {
     }
   }
 
-  const companyUpdatePromises = Array.from(companyUpdates.entries()).map(([id, update]) =>
-    supabase
-      .from('companies')
-      .update({ current_price: Number(update.current_price.toFixed(4)), last_return: update.last_return })
-      .eq('id', id)
-  );
-  await Promise.all(companyUpdatePromises);
+  // One bulk update call instead of one HTTP request per company -- the
+  // latter was what blew the function's resource limit at high time
+  // multipliers.
+  const bulkUpdatePayload = Array.from(companyUpdates.entries()).map(([id, update]) => ({
+    id,
+    current_price: Number(update.current_price.toFixed(4)),
+    last_return: update.last_return,
+  }));
+  const { error: bulkUpdateError } = await supabase.rpc('bulk_update_companies', { updates: bulkUpdatePayload });
+  if (bulkUpdateError) {
+    return new Response(JSON.stringify({ error: bulkUpdateError.message }), { status: 500 });
+  }
 
   const realMinutesConsumed = ticksToRun / Number(state.time_multiplier);
   const newLastTickAt = new Date(lastTickAt.getTime() + realMinutesConsumed * 60_000);

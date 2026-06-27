@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "seed": "node scripts/seed-market.mjs"
+    "seed": "node scripts/seed-market.mjs",
+    "seed:ipo": "node scripts/seed-ipo-pipeline.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
