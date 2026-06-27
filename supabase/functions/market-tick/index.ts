@@ -5,8 +5,13 @@
 //
 // Phase 1 scope: equities only, core price model (GBM + mean reversion +
 // momentum + sector/market correlated shocks + archetype-driven idiosyncratic
-// events). Macro engine (Fed/CPI/GDP), other asset classes, and news generation
-// are later phases.
+// events). Other asset classes and news generation are later phases.
+//
+// Phase 2 addition: reads macro_state (set by the separate macro-tick
+// function) once per invocation and applies a small sector-sensitivity tilt
+// on top of the existing per-company math -- the cycle phase and Fed funds
+// rate nudge each company's return, scaled by its sector's sensitivity and
+// its own beta, the same way the market-wide shock already uses beta.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -23,6 +28,41 @@ const SECTORS = [
   'consumer_discretionary', 'consumer_staples', 'industrials',
   'utilities', 'real_estate', 'materials', 'communication_services',
 ] as const;
+
+// Small per-tick bias applied market-wide depending on the macro cycle phase,
+// before being scaled by each sector's cyclical sensitivity and the
+// company's own beta. Magnitudes are deliberately small relative to a
+// company's own volatility-driven shock -- this is a lean, not an override.
+const CYCLE_PHASE_BIAS: Record<string, number> = {
+  expansion: 0.0003,
+  peak: 0.0001,
+  recession: -0.0004,
+  trough: -0.0002,
+};
+
+// Treated as the "neutral" Fed funds rate for rate-tilt purposes -- above
+// this, rate-sensitive sectors lean negative; below it, they lean positive.
+const NEUTRAL_FED_RATE = 2.5;
+
+// How strongly each sector amplifies/dampens the cycle-phase tilt and the
+// Fed-rate tilt. Cyclical sectors swing more with the economy; rate-sensitive
+// sectors (financials, real estate, utilities) react more to rate changes.
+// This is a simplification -- in reality financials can benefit from higher
+// rates via net interest margin, but treating all rate-sensitive sectors
+// uniformly is a reasonable v1 approximation.
+const SECTOR_SENSITIVITY: Record<string, { cyclical: number; rate: number }> = {
+  technology: { cyclical: 1.0, rate: 0.4 },
+  healthcare: { cyclical: 0.3, rate: 0.2 },
+  energy: { cyclical: 0.8, rate: 0.2 },
+  financials: { cyclical: 0.9, rate: 1.0 },
+  consumer_discretionary: { cyclical: 1.1, rate: 0.6 },
+  consumer_staples: { cyclical: 0.2, rate: 0.2 },
+  industrials: { cyclical: 1.0, rate: 0.5 },
+  utilities: { cyclical: 0.2, rate: 0.9 },
+  real_estate: { cyclical: 0.7, rate: 1.0 },
+  materials: { cyclical: 0.9, rate: 0.4 },
+  communication_services: { cyclical: 0.6, rate: 0.3 },
+};
 
 interface Company {
   id: string;
@@ -82,6 +122,21 @@ Deno.serve(async () => {
     return new Response(JSON.stringify({ error: companiesError?.message ?? 'failed to load companies' }), { status: 500 });
   }
 
+  const { data: macro, error: macroError } = await supabase
+    .from('macro_state')
+    .select('cycle_phase, fed_funds_rate')
+    .eq('id', 1)
+    .single();
+
+  if (macroError || !macro) {
+    return new Response(JSON.stringify({ error: macroError?.message ?? 'macro_state not found' }), { status: 500 });
+  }
+
+  // Computed once per invocation -- macro_state only changes via the
+  // separate macro-tick function, never within this run.
+  const cyclePhaseBias = CYCLE_PHASE_BIAS[macro.cycle_phase] ?? 0;
+  const rateGapFromNeutral = NEUTRAL_FED_RATE - Number(macro.fed_funds_rate);
+
   const liveCompanies = companies as Company[];
   let simulatedTime = new Date(state.simulated_time);
 
@@ -112,7 +167,11 @@ Deno.serve(async () => {
 
       const momentumTerm = company.momentum_strength * lastReturn;
 
-      let stepReturn = company.drift + correlatedShock + reversionTerm + momentumTerm;
+      const sensitivity = SECTOR_SENSITIVITY[company.sector] ?? { cyclical: 0.5, rate: 0.5 };
+      const cycleTilt = cyclePhaseBias * sensitivity.cyclical * company.beta;
+      const rateTilt = rateGapFromNeutral * 0.0002 * sensitivity.rate * company.beta;
+
+      let stepReturn = company.drift + correlatedShock + reversionTerm + momentumTerm + cycleTilt + rateTilt;
 
       let eventImpact = 0;
       if (Math.random() < company.event_probability) {
