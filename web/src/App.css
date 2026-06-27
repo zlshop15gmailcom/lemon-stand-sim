@@ -1,0 +1,112 @@
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+}
+
+.app-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.app-shell__brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  white-space: nowrap;
+}
+
+.app-shell__nav {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.app-shell__main {
+  padding-top: 20px;
+}
+
+.app-shell__placeholder {
+  color: var(--text-muted);
+  padding: 40px 0;
+  text-align: center;
+}
+
+.simulated-clock {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.85rem;
+}
+
+.simulated-clock__label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.simulated-clock__value {
+  font-weight: 600;
+}
+
+.simulated-clock--error {
+  color: var(--down);
+}
+
+.time-control-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  flex-wrap: wrap;
+}
+
+.time-control-bar__custom {
+  display: flex;
+  gap: 6px;
+}
+
+.time-control-bar__custom input {
+  width: 90px;
+}
+
+.time-control-bar__current {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-left: 8px;
+}
+
+.time-control-bar__error {
+  color: var(--down);
+  font-size: 0.85rem;
+}
+
+.company-list__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.company-list__count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.company-list__error {
+  color: var(--down);
+  margin-bottom: 12px;
+}
+
+.company-list__loading {
+  color: var(--text-muted);
+}
+
+.company-list__ticker {
+  font-weight: 600;
+}

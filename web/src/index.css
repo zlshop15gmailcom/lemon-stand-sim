@@ -1,0 +1,91 @@
+:root {
+  --bg: #0d1117;
+  --bg-elevated: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --up: #3fb950;
+  --down: #f85149;
+
+  color-scheme: dark;
+  font: 16px/145% -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  color: var(--text);
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+}
+
+.is-up {
+  color: var(--up);
+}
+
+.is-down {
+  color: var(--down);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+button, select, input {
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
